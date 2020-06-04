@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 #   Copyright 2008 Kyle Crawford
 
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +15,10 @@
 #   Send bug reports and comments to kcrwfrd at gmail
 
 # Possible future enhancements
-# tie in with application identifier codes for locating apps and replacing them in the
-# dock with newer versions?
+# tie in with application identifier codes for locating apps and replacing them in the dock with newer versions?
 
-import getopt
-import os
-import pipes
+import sys, plistlib, subprocess, os, getopt, re, pipes, tempfile, pwd
 import platform
-import plistlib
-import pwd
-import re
-import subprocess
-import sys
-import tempfile
 import time
 
 
@@ -41,15 +30,14 @@ version = "2.0.5"
 def usage(e=None):
     """Displays usage information and error if one occurred"""
 
-    progname = os.path.basename(sys.argv[0])
-
-    print """usage:     %s -h
-usage:     %s --add <path to item> | <url> [--label <label>] [ folder_options ] [ position_options ] [--no-restart] [ plist_location_specification ]
-usage:     %s --remove <dock item label> | <app bundle id> | all | spacer-tiles [--no-restart] [ plist_location_specification ]
-usage:     %s --move <dock item label>  position_options [ plist_location_specification ]
-usage:     %s --find <dock item label> [ plist_location_specification ]
-usage:     %s --list [ plist_location_specification ]
-usage:     %s --version
+    print(
+        """usage:     %(progname)s -h
+usage:     %(progname)s --add <path to item> | <url> [--label <label>] [ folder_options ] [ position_options ] [--no-restart] [ plist_location_specification ]
+usage:     %(progname)s --remove <dock item label> | <app bundle id> | all | spacer-tiles [--no-restart] [ plist_location_specification ]
+usage:     %(progname)s --move <dock item label>  position_options [ plist_location_specification ]
+usage:     %(progname)s --find <dock item label> [ plist_location_specification ]
+usage:     %(progname)s --list [ plist_location_specification ]
+usage:     %(progname)s --version
 
 position_options:
   --replacing <dock item label name>                            replaces the item with the given dock label or adds the item to the end if item to replace is not found
@@ -74,42 +62,42 @@ global_options:
 
 Examples:
   The following adds TextEdit.app to the end of the current user's dock:
-           %s --add /Applications/TextEdit.app
+           %(progname)s --add /Applications/TextEdit.app
 
   The following replaces Time Machine with TextEdit.app in the current user's dock:
-           %s --add /Applications/TextEdit.app --replacing 'Time Machine'
+           %(progname)s --add /Applications/TextEdit.app --replacing 'Time Machine'
 
   The following adds TextEdit.app after the item Time Machine in every user's dock on that machine:
-           %s --add /Applications/TextEdit.app --after 'Time Machine' --allhomes
+           %(progname)s --add /Applications/TextEdit.app --after 'Time Machine' --allhomes
 
   The following adds ~/Downloads as a grid stack displayed as a folder for every user's dock on that machine:
-           %s --add '~/Downloads' --view grid --display folder --allhomes
+           %(progname)s --add '~/Downloads' --view grid --display folder --allhomes
 
   The following adds a url dock item after the Downloads dock item for every user's dock on that machine:
-           %s --add vnc://miniserver.local --label 'Mini VNC' --after Downloads --allhomes
+           %(progname)s --add vnc://miniserver.local --label 'Mini VNC' --after Downloads --allhomes
 
   The following removes System Preferences from every user's dock on that machine:
-           %s --remove 'System Preferences' --allhomes
+           %(progname)s --remove 'System Preferences' --allhomes
 
   The following moves System Preferences to the second slot on every user's dock on that machine:
-           %s --move 'System Preferences' --position 2 --allhomes
+           %(progname)s --move 'System Preferences' --position 2 --allhomes
 
   The following finds any instance of iTunes in the specified home directory's dock:
-           %s --find iTunes /Users/jsmith
+           %(progname)s --find iTunes /Users/jsmith
 
   The following lists all dock items for all home directories at homeloc in the form: item<tab>path<tab><section>tab<plist>
-           %s --list --homeloc /Volumes/RAID/Homes --allhomes
+           %(progname)s --list --homeloc /Volumes/RAID/Homes --allhomes
 
   The following adds Firefox after Safari in the Default User Template without restarting the Dock
-           %s --add /Applications/Firefox.app --after Safari --no-restart '/System/Library/User Template/English.lproj'
+           %(progname)s --add /Applications/Firefox.app --after Safari --no-restart '/System/Library/User Template/English.lproj'
 
   The following adds a spacer tile in the apps section after Mail
-           %s --add '' --type spacer --section apps --after Mail
-           %s --add '' --type small-spacer --section apps --after Mail
-           %s --add '' --type flex-spacer --section apps --after Mail
+           %(progname)s --add '' --type spacer --section apps --after Mail
+           %(progname)s --add '' --type small-spacer --section apps --after Mail
+           %(progname)s --add '' --type flex-spacer --section apps --after Mail
 
   The following removes all spacer tiles
-           %s --remove spacer-tiles
+           %(progname)s --remove spacer-tiles
 
 Notes:
   When specifying a relative path like ~/Documents with the --allhomes option, ~/Documents must be quoted like '~/Documents' to get the item relative to each home
@@ -117,11 +105,12 @@ Notes:
 
 Contact:
   Send bug reports and comments to kcrwfrd at gmail.
-""" % progname
-
+"""
+        % dict(progname=os.path.basename(sys.argv[0]))
+    )
     if e:
-        print ""
-        print "Error processing options:", e
+        print("")
+        print("Error processing options:", e)
         sys.exit(1)
     sys.exit(0)
 
@@ -130,7 +119,7 @@ def verboseOutput(*args):
     """Used by verbose option (-v) to send more output to stdout"""
     if verbose:
         try:
-            print "verbose:", args
+            print("verbose:", args)
         except:
             pass
 
@@ -166,7 +155,9 @@ def main():
                 "hupdock=",
             ],
         )
-    except getopt.GetoptError, e:  # if parsing of options fails, display usage and parse error
+
+    except getopt.GetoptError as e:
+        # if parsing of options fails, display usage and parse error
         usage(e)
 
     # setup default values
@@ -198,7 +189,7 @@ def main():
         elif opt == "-v":
             verbose = True
         elif opt == "--version":
-            print version
+            print(version)
             sys.exit(0)
         elif opt == "--add":
             add_path = arg
@@ -305,7 +296,7 @@ def main():
             plist_paths = args
     # exit if we couldn't find any plists to process
     if len(plist_paths) < 1:
-        print "no dock plists were found"
+        print("no dock plists were found")
         sys.exit(1)
 
     # loop over plist paths
@@ -325,7 +316,7 @@ def main():
             plist_path = os.path.expanduser(plist_path)
             plist_path = os.path.abspath(plist_path)
         else:
-            print plist_path, "does not seem to be a home directory or a dock plist"
+            print(plist_path, "does not seem to be a home directory or a dock plist")
             sys.exit(1)
 
         # If we are modifying the currently logged in user's dock, wait for mod-count to be > 1 because dock is still being setup by Apple
@@ -356,7 +347,7 @@ def main():
                 if removeItem(pl, remove_label):
                     changed = True
                 else:
-                    print "item", remove_label, "was not found in", plist_path
+                    print("item", remove_label, "was not found in", plist_path)
             if changed:
                 commitPlist(pl, plist_path, restart_dock)
         elif list:  # --list action
@@ -368,23 +359,27 @@ def main():
                 for item in pl.get(section, []):
                     try:
                         # join and print relevant data into a string separated by tabs
-                        print "\t".join(
-                            (
-                                item["tile-data"]["file-label"],
-                                item["tile-data"]["file-data"]["_CFURLString"],
-                                section,
-                                plist_path,
+                        print(
+                            "\t".join(
+                                (
+                                    item["tile-data"]["file-label"],
+                                    item["tile-data"]["file-data"]["_CFURLString"],
+                                    section,
+                                    plist_path,
+                                )
                             )
                         )
                     except:
                         try:
                             # join and print relevant data into a string separated by tabs
-                            print "\t".join(
-                                (
-                                    item["tile-data"]["label"],
-                                    item["tile-data"]["url"]["_CFURLString"],
-                                    section,
-                                    plist_path,
+                            print(
+                                "\t".join(
+                                    (
+                                        item["tile-data"]["label"],
+                                        item["tile-data"]["url"]["_CFURLString"],
+                                        section,
+                                        plist_path,
+                                    )
                                 )
                             )
                         except:
@@ -392,7 +387,7 @@ def main():
 
         elif find_label != None:  # --find action
             # correct unicode names handling
-            find_label = find_label.decode("utf-8")
+            find_label = find_label
             # since we are only reading the plist, make a copy before converting it to be read
             pl = readPlist(plist_path)
             # set found state
@@ -406,7 +401,15 @@ def main():
                             == find_label
                         ):
                             item_found = True
-                            print find_label, "was found in", section, "at slot", item_offset + 1, "in", plist_path
+                            print(
+                                find_label,
+                                "was found in",
+                                section,
+                                "at slot",
+                                item_offset + 1,
+                                "in",
+                                plist_path,
+                            )
                     except:
                         try:
                             if (
@@ -414,11 +417,19 @@ def main():
                                 == find_label
                             ):
                                 item_found = True
-                                print find_label, "was found in", section, "at slot", item_offset + 1, "in", plist_path
+                                print(
+                                    find_label,
+                                    "was found in",
+                                    section,
+                                    "at slot",
+                                    item_offset + 1,
+                                    "in",
+                                    plist_path,
+                                )
                         except:
                             pass
             if not item_found:
-                print find_label, "was not found in", plist_path
+                print(find_label, "was not found in", plist_path)
                 if (
                     not all_homes
                 ):  # only exit non-zero if we aren't processing all homes, because for allhomes, exit status for find would be irrelevant
@@ -426,7 +437,7 @@ def main():
 
         elif move_label != None:  # --move action
             # correct unicode names handling
-            move_label = move_label.decode("utf-8")
+            move_label = move_label
             pl = readPlist(plist_path)
             # check for a position option before processing
             if position is None and before_item is None and after_item is None:
@@ -435,7 +446,7 @@ def main():
             if moveItem(pl, move_label, position, before_item, after_item):
                 commitPlist(pl, plist_path, restart_dock)
             else:
-                print "move failed for", move_label, "in", plist_path
+                print("move failed for", move_label, "in", plist_path)
 
         elif add_path != None:  # --add action
             if add_path.startswith(
@@ -504,7 +515,7 @@ def main():
             ):
                 commitPlist(pl, plist_path, restart_dock)
             else:
-                print "item", add_path, "was not added to Dock"
+                print("item", add_path, "was not added to Dock")
                 if (
                     not all_homes
                 ):  # only exit non-zero if we aren't processing all homes, because for allhomes, exit status for add would be irrelevant
@@ -522,7 +533,9 @@ def writePlist(pl, plist_path):
     # get a tempfile path for writing our plist
     plist_import_path = tempfile.mktemp(dir="/tmp")
     # Write the plist to our temporary plist for importing because defaults can't import from a pipe (yet)
-    plistlib.writePlist(pl, plist_import_path)
+    temp_plist = open(plist_import_path, "wb")
+    plistlib.dump(pl, temp_plist)
+    temp_plist.close()
     # get original permissions
     plist_stat = os.stat(plist_path)
     # If we are running as root, ensure we run as the correct user to update cfprefsd
@@ -596,7 +609,7 @@ def readPlist(plist_path):
         except Exception as e:
             raise e
     # parse the xml into a dictionary
-    pl = plistlib.readPlistFromString(plist_string)
+    pl = plistlib.loads(plist_string)
     return pl
 
 
@@ -651,7 +664,7 @@ def moveItem(pl, move_label=None, position=None, before_item=None, after_item=No
                 try:
                     int(position)
                 except:
-                    print "Invalid position", position
+                    print("Invalid position", position)
                     return False
                 pl[section].insert(int(position) - 1, item_to_move)
                 return True
@@ -710,10 +723,6 @@ def addItem(
     if arrangement == None:
         arrangement = 2
 
-    # fix problems with unicode file names
-    enc = sys.stdin.encoding if sys.stdin.encoding else "UTF-8"
-    add_path = unicode(add_path, enc)
-
     # set a dock label if one isn't provided
     if label_name == None:
         if tile_type == "url-tile":
@@ -723,18 +732,18 @@ def addItem(
             base_name = re.sub("/$", "", add_path).split("/")[-1]
             label_name = re.sub(".app$", "", base_name)
 
-    label_name = label_name.decode("utf-8")
+    label_name = label_name
 
     # only add if item label isn't already there
 
     if replace_label != label_name:
         for existing_dock_item in pl[section]:
             for label_key in ["file-label", "label"]:
-                if existing_dock_item["tile-data"].has_key(label_key):
+                if label_key in existing_dock_item["tile-data"]:
                     if existing_dock_item["tile-data"][label_key] == label_name:
-                        print "%s already exists in dock. Use --replacing '%s' to update an existing item" % (
-                            label_name,
-                            label_name,
+                        print(
+                            "%s already exists in dock. Use --replacing '%s' to update an existing item"
+                            % (label_name, label_name)
                         )
                         return False
 
@@ -762,39 +771,19 @@ def addItem(
             "tile-type": tile_type,
         }
     elif tile_type == "directory-tile":
-        if (
-            subprocess.Popen(
-                ["/usr/bin/sw_vers", "-productVersion"], stdout=subprocess.PIPE
-            )
-            .stdout.read()
-            .rstrip()
-            .split(".")[1]
-            == "4"
-        ):  # gets the decimal after 10 in sw_vers; 10.4 does not use 10.5 options for stacks
-            new_item = {
-                "GUID": new_guid,
-                "tile-data": {
-                    "directory": 1,
-                    "file-data": {"_CFURLString": add_path, "_CFURLStringType": 0},
-                    "file-label": label_name,
-                    "file-type": 2,
-                },
-                "tile-type": tile_type,
-            }
-        else:
-            new_item = {
-                "GUID": new_guid,
-                "tile-data": {
-                    "arrangement": arrangement,
-                    "directory": 1,
-                    "displayas": displayas,
-                    "file-data": {"_CFURLString": add_path, "_CFURLStringType": 0},
-                    "file-label": label_name,
-                    "file-type": 2,
-                    "showas": showas,
-                },
-                "tile-type": tile_type,
-            }
+        new_item = {
+            "GUID": new_guid,
+            "tile-data": {
+                "arrangement": arrangement,
+                "directory": 1,
+                "displayas": displayas,
+                "file-data": {"_CFURLString": add_path, "_CFURLStringType": 0},
+                "file-label": label_name,
+                "file-type": 2,
+                "showas": showas,
+            },
+            "tile-type": tile_type,
+        }
 
     elif tile_type == "url-tile":
         new_item = {
@@ -812,7 +801,7 @@ def addItem(
     ):
         new_item = {"GUID": new_guid, "tile-data": {}, "tile-type": tile_type}
     else:
-        print "unknown type:", tile_type
+        print("unknown type:", tile_type)
         sys.exit(1)
 
     verboseOutput("adding", new_item)
@@ -832,7 +821,7 @@ def addItem(
             try:
                 int(position)
             except:
-                print "Invalid position", position
+                print("Invalid position", position)
                 return False
             if int(position) == 0:
                 pl[section].insert(int(position), new_item)
@@ -867,13 +856,13 @@ def addItem(
 
 def removeItem(pl, item_name):
     removal_succeeded = False
-    item_name = item_name.decode("utf-8")
-    if item_name == u"all":
+    item_name = item_name
+    if item_name == "all":
         verboseOutput("Removing all items")
         pl["persistent-apps"] = []
         pl["persistent-others"] = []
         return True
-    if item_name == u"spacer-tiles":
+    if item_name == "spacer-tiles":
         verboseOutput("Removing all spacers")
         for section in ["persistent-apps", "persistent-others"]:
             for item in pl.get(section, []):
@@ -913,7 +902,7 @@ def commitPlist(pl, plist_path, restart_dock):
 
 def label_key_for_tile(item):
     for label_key in ["file-label", "label"]:
-        if item.has_key(label_key):
+        if label_key in item:
             return label_key
 
 
