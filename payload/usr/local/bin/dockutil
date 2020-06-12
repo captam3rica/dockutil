@@ -716,15 +716,15 @@ def addItem(
     label_name=None,
 ):
     """adds an item to an existing dock plist object"""
-    if displayas == None:
+    if displayas is None:
         displayas = 1
-    if showas == None:
+    if showas is None:
         showas = 0
-    if arrangement == None:
+    if arrangement is None:
         arrangement = 2
 
     # set a dock label if one isn't provided
-    if label_name == None:
+    if label_name is None:
         if tile_type == "url-tile":
             label_name = add_path
             section = "persistent-others"
@@ -747,7 +747,7 @@ def addItem(
                         )
                         return False
 
-    if replace_label != None:
+    if replace_label is not None:
         for item_offset in range(len(pl[section])):
             tile_replace_candidate = pl[section][item_offset]["tile-data"]
             if (
