@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 #   Copyright 2008 Kyle Crawford
 
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -155,9 +157,7 @@ def main():
                 "hupdock=",
             ],
         )
-
-    except getopt.GetoptError as e:
-        # if parsing of options fails, display usage and parse error
+    except getopt.GetoptError as e:  # if parsing of options fails, display usage and parse error
         usage(e)
 
     # setup default values
@@ -716,15 +716,15 @@ def addItem(
     label_name=None,
 ):
     """adds an item to an existing dock plist object"""
-    if displayas is None:
+    if displayas == None:
         displayas = 1
-    if showas is None:
+    if showas == None:
         showas = 0
-    if arrangement is None:
+    if arrangement == None:
         arrangement = 2
 
     # set a dock label if one isn't provided
-    if label_name is None:
+    if label_name == None:
         if tile_type == "url-tile":
             label_name = add_path
             section = "persistent-others"
@@ -747,7 +747,7 @@ def addItem(
                         )
                         return False
 
-    if replace_label is not None:
+    if replace_label != None:
         for item_offset in range(len(pl[section])):
             tile_replace_candidate = pl[section][item_offset]["tile-data"]
             if (
