@@ -126,6 +126,33 @@ def verboseOutput(*args):
             pass
 
 
+# Added by Matt Wilson (github @captam3rica) 2020-07-13
+#######################################################################################
+
+
+def read_plist_from_string(bytestring):
+    """Wrapper for the differences between Python 2 and Python 3's plistlib"""
+    try:
+        return plistlib.loads(bytestring)
+    except AttributeError:
+        # plistlib module doesn't have a load function (as in Python 2)
+        return plistlib.readPlistFromString(bytestring)
+
+
+def write_plist(plist, filepath):
+    """Wrapper for the differences between Python 2 and Python 3's plistlib
+    Tries to use the python3 dumps function to write the plist. Will failover to
+    python2 if the dumps function is not found."""
+    try:
+        plistlib.dumps(plist, filepath)
+    except AttributeError:
+        # plistlib module doesn't have a dump function (as in Python 2)
+        plistlib.writePlist(plist, filepath)
+
+
+#######################################################################################
+
+
 def main():
     """Parses options and arguments and performs fuctions"""
     # setup our getoput opts and args
@@ -534,7 +561,7 @@ def writePlist(pl, plist_path):
     plist_import_path = tempfile.mktemp(dir="/tmp")
     # Write the plist to our temporary plist for importing because defaults can't import from a pipe (yet)
     temp_plist = open(plist_import_path, "wb")
-    plistlib.dump(pl, temp_plist)
+    write_plist(pl, temp_plist)
     temp_plist.close()
     # get original permissions
     plist_stat = os.stat(plist_path)
@@ -609,7 +636,8 @@ def readPlist(plist_path):
         except Exception as e:
             raise e
     # parse the xml into a dictionary
-    pl = plistlib.loads(plist_string)
+    # pl = plistlib.loads(plist_string)  # Commented by @captam3rica 2020-07-13
+    pl = read_plist_from_string(plist_string)
     return pl
 
 
